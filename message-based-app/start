@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+# vim: set ft=ruby
+# encoding: utf-8
+
+require "rubygems"
+require 'eventmachine'
+require_relative 'application/micro_service'
+
+STDOUT.sync = true
+
+class Handler  < EventMachine::Connection
+  attr_reader :micro_service
+
+  def initialize(*args)
+    super
+    @micro_service = MicroService.new
+    @micro_service.subscribe("arithmetic_progression", "maths.arithmetic_progression")
+    @micro_service.subscribe("geometric_progression", "maths.geometric_progression")
+    index = args[0]
+    puts "-- I'm server number#{index}"
+  end
+
+  def post_init
+    puts "-- someone connected to the server!"
+  end
+
+  def receive_data(data)
+    puts ">>>>>>> #{data.inspect} <<<<<<<<<"
+    fork do
+      micro_service.publish("21", "maths.arithmetic_progression")
+      micro_service.publish("12", "maths.arithmetic_progression")
+      micro_service.publish("40", "maths.arithmetic_progression")
+    end
+    Process.waitall
+    send_data "Request processed"
+    close_connection_after_writing
+  end
+
+  def unbind
+    puts "-- someone disconnected from the server!"
+    micro_service.stop
+  end
+end
+
+EventMachine::run do
+  EventMachine::start_server("0.0.0.0", 9090, Handler, 1)
+  puts "-- server is listening to 9090"
+end
